@@ -90,7 +90,7 @@ class LabValidator:
             return False, f"Ressource {kind}/{name} introuvable ou erreur : {str(e)}"
 
     def check_jsonpath(self, rule):
-        kind = rule["kind"]
+        kind = rule["kind"].lower()
         name = rule["name"]
         ns = rule.get("namespace", "default")
         path = rule["path"]
