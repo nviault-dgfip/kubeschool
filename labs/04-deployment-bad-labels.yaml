@@ -1,0 +1,92 @@
+id: "L04"
+title: "Deployment avec labels incohérents"
+level: "Intermédiaire"
+objectives: |
+  - Identifier un échec de rollout dû à une incohérence de labels
+  - Utiliser `kubectl rollout status` pour monitorer un déploiement
+  - Corriger la configuration d'un Deployment
+images:
+  - "nginx:1.29.4"
+instructions: |
+  **Contexte** : Manifeste de déploiement attendu :
+  ```yaml
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: nginx-deployment
+    namespace: mon-namespace
+    labels:
+      app: nginx-dp
+  spec:
+    replicas: 3
+    selector:
+      matchLabels:
+        app: nginx-dp
+    template:
+      metadata:
+        labels:
+          app: nginx-dp
+      spec:
+        containers:
+        - name: nginx-dp
+          image: nginx:1.29.4
+          ports:
+          - containerPort: 80
+  ```
+
+  **Consignes** :
+  1. Créez le fichier `deployment-bad-labels.yaml` avec l'erreur suivante :
+  ```yaml
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: nginx-deployment
+    namespace: mon-namespace
+    labels:
+      app: nginx-dp
+  spec:
+    replicas: 3
+    selector:
+      matchLabels:
+        app: nginx-test # Erreur : ne correspond pas aux labels du template
+    template:
+      metadata:
+        labels:
+          app: nginx-dp
+      spec:
+        containers:
+        - name: nginx-dp
+          image: nginx:1.29.4
+          ports:
+          - containerPort: 80
+          resources:
+            requests:
+              memory: "200Mi"
+              cpu: "100m"
+            limits:
+              memory: "300Mi"
+              cpu: "200m"
+  ```
+  2. Appliquez-le et utilisez `kubectl rollout status deployment/nginx-deployment -n mon-namespace` pour constater l'échec ou le blocage. Note : Kubernetes rejette souvent directement cette configuration à l'application car le selector doit correspondre aux labels du template.
+  3. Identifiez la cause et corrigez le *selector* pour qu'il utilise `app: nginx-dp`.
+
+validation_rules:
+  - name: "Deployment existe dans mon-namespace"
+    type: "resource_exists"
+    kind: "Deployment"
+    name: "nginx-deployment"
+    namespace: "mon-namespace"
+  - name: "Labels cohérents"
+    type: "jsonpath_assert"
+    kind: "Deployment"
+    name: "nginx-deployment"
+    namespace: "mon-namespace"
+    path: "spec.selector.matchLabels.app"
+    expected: "nginx-dp"
+  - name: "Déploiement réussi"
+    type: "jsonpath_assert"
+    kind: "Deployment"
+    name: "nginx-deployment"
+    namespace: "mon-namespace"
+    path: "status.availableReplicas"
+    expected: 3

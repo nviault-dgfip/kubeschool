@@ -1,0 +1,93 @@
+id: "L03"
+title: "ReplicaSet avec mauvais selector et mauvais namespace"
+level: "Intermédiaire"
+objectives: |
+  - Comprendre la relation entre selector et labels dans un ReplicaSet
+  - Identifier une erreur de namespace dans un manifeste
+  - Déboguer un ReplicaSet qui ne crée pas de Pods
+images:
+  - "nginx:1.29.4"
+instructions: |
+  **Contexte** : Exemple de ReplicaSet fonctionnel :
+  ```yaml
+  apiVersion: apps/v1
+  kind: ReplicaSet
+  metadata:
+    name: nginx-rs
+    namespace: mon-namespace
+    labels:
+      app: mon-nginx-rs
+  spec:
+    replicas: 3
+    selector:
+      matchLabels:
+        app: mon-nginx-rs
+    template:
+      metadata:
+        labels:
+          app: mon-nginx-rs
+      spec:
+        containers:
+        - name: nginx-rs
+          image: nginx:1.29.4
+          ports:
+          - containerPort: 80
+  ```
+
+  **Consignes** :
+  1. Assurez-vous que le namespace `mon-namespace` existe.
+  2. Créez le fichier `replicaset-bad.yaml` avec les erreurs suivantes :
+  ```yaml
+  apiVersion: apps/v1
+  kind: ReplicaSet
+  metadata:
+    name: nginx-rs
+    namespace: monnamespace # Erreur : devrait être mon-namespace
+    labels:
+      app: mon-nginx-rs
+  spec:
+    replicas: 3
+    selector:
+      matchLabels:
+        app: test-label # Erreur : ne correspond pas au template.labels
+    template:
+      metadata:
+        labels:
+          app: mon-nginx-rs
+      spec:
+        containers:
+        - name: nginx-rs
+          image: nginx:1.29.4
+          ports:
+          - containerPort: 80
+  ```
+  3. Appliquez-le et observez que **aucun pod n'est créé** (utilisez `kubectl get pods -n mon-namespace` et `kubectl describe rs nginx-rs -n monnamespace`).
+  4. Corrigez le *selector* (pour qu'il corresponde aux labels du template) et le *namespace* (`mon-namespace`) afin que le ReplicaSet fonctionne.
+
+validation_rules:
+  - name: "ReplicaSet existe dans mon-namespace"
+    type: "resource_exists"
+    kind: "ReplicaSet"
+    name: "nginx-rs"
+    namespace: "mon-namespace"
+  - name: "Selector correct"
+    type: "jsonpath_assert"
+    kind: "ReplicaSet"
+    name: "nginx-rs"
+    namespace: "mon-namespace"
+    path: "spec.selector.matchLabels.app"
+    expected: "mon-nginx-rs"
+  - name: "Nombre de réplicas correct"
+    type: "jsonpath_assert"
+    kind: "ReplicaSet"
+    name: "nginx-rs"
+    namespace: "mon-namespace"
+    path: "status.replicas"
+    expected: 3
+  - name: "Pods prêts"
+    type: "jsonpath_assert"
+    kind: "ReplicaSet"
+    name: "nginx-rs"
+    namespace: "mon-namespace"
+    path: "status.readyReplicas"
+    expected: 3

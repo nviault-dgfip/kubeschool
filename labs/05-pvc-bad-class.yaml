@@ -1,0 +1,64 @@
+id: "L05"
+title: "PersistentVolumeClaim avec classe de stockage inexistante"
+level: "Intermédiaire"
+objectives: |
+  - Diagnostiquer un PVC restant à l'état 'Pending'
+  - Comprendre l'utilisation des StorageClasses
+  - Corriger une demande de volume persistant
+instructions: |
+  **Contexte** : Exemple de PVC fonctionnel :
+  ```yaml
+  apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: mon-pvc-class
+    namespace: mon-namespace
+  spec:
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: standard
+    resources:
+      requests:
+        storage: 300Mi
+  ```
+
+  **Consignes** :
+  1. Créez le fichier `pvc-bad-class.yaml` avec une StorageClass inexistante :
+  ```yaml
+  apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: mon-pvc-class
+    namespace: mon-namespace
+  spec:
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: extended # Erreur : cette classe n'existe pas dans Kind par défaut
+    resources:
+      requests:
+        storage: 300Mi
+  ```
+  2. Appliquez-le et observez que le PVC reste **Pending** (`kubectl get pvc -n mon-namespace`).
+  3. Utilisez `kubectl describe pvc mon-pvc-class -n mon-namespace` pour voir l'événement indiquant que la StorageClass est introuvable.
+  4. Corrigez le nom de la classe de stockage en utilisant `standard` (la classe par défaut dans Kind).
+
+validation_rules:
+  - name: "PVC existe dans mon-namespace"
+    type: "resource_exists"
+    kind: "PersistentVolumeClaim"
+    name: "mon-pvc-class"
+    namespace: "mon-namespace"
+  - name: "StorageClass correcte"
+    type: "jsonpath_assert"
+    kind: "PersistentVolumeClaim"
+    name: "mon-pvc-class"
+    namespace: "mon-namespace"
+    path: "spec.storageClassName"
+    expected: "standard"
+  - name: "PVC lié (Bound)"
+    type: "jsonpath_assert"
+    kind: "PersistentVolumeClaim"
+    name: "mon-pvc-class"
+    namespace: "mon-namespace"
+    path: "status.phase"
+    expected: "Bound"
