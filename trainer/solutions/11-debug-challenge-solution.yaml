@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quota-equipe
+  namespace: mon-namespace
+spec:
+  hard:
+    requests.memory: "512Mi"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: backend-db
+  namespace: mon-namespace
+  labels:
+    app: redis-db
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: zone
+            operator: In
+            values:
+            - paris
+  containers:
+  - name: redis
+    image: redis:7.2
+    resources:
+      requests:
+        memory: "128Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: mon-namespace
+spec:
+  selector:
+    app: redis-db
+  ports:
+  - port: 6379
+    targetPort: 6379
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-app
+  namespace: mon-namespace
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web-ui
+  template:
+    metadata:
+      labels:
+        app: web-ui
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.29.4
+        resources:
+          limits:
+            memory: "64Mi"

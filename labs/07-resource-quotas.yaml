@@ -1,0 +1,84 @@
+id: "L07"
+title: "Dépannage de Quotas de Ressources"
+level: "Avancé"
+objectives: |
+  - Comprendre l'impact des ResourceQuotas sur le déploiement de Pods
+  - Identifier une erreur de dépassement de quota via kubectl describe
+  - Ajuster les ressources demandées (requests) pour respecter les limites du namespace
+images:
+  - "nginx:1.29.4"
+instructions: |
+  **Contexte** : Vous devez déployer une application dans un namespace sécurisé par des quotas.
+
+  **Consignes** :
+  1. Créez le namespace 'mon-namespace' s'il n'existe pas.
+  2. Créez un fichier `quota.yaml` et appliquez-le :
+  ```yaml
+  apiVersion: v1
+  kind: ResourceQuota
+  metadata:
+    name: quota-equipe
+    namespace: mon-namespace
+  spec:
+    hard:
+      requests.cpu: "500m"
+      requests.memory: "512Mi"
+      limits.cpu: "1"
+      limits.memory: "1Gi"
+  ```
+  3. Tentez de déployer l'application suivante via un fichier `app-deploy.yaml` :
+  ```yaml
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: nginx-quota
+    namespace: mon-namespace
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: nginx
+    template:
+      metadata:
+        labels:
+          app: nginx
+      spec:
+        containers:
+        - name: nginx
+          image: nginx:1.29.4
+          resources:
+            requests:
+              memory: "1Gi" # Erreur : dépasse le quota du namespace (512Mi)
+              cpu: "200m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+  ```
+  4. Observez que le déploiement ne parvient pas à créer le Pod. Utilisez `kubectl describe deployment nginx-quota -n mon-namespace` et `kubectl get events -n mon-namespace`. Note : Le message d'erreur est souvent visible dans le ReplicaSet créé par le Deployment (`kubectl describe rs <nom-du-rs> -n mon-namespace`).
+  5. Corrigez les `requests` et `limits` du conteneur dans `app-deploy.yaml` pour qu'elles soient inférieures ou égales au quota (par exemple : `requests.memory: "256Mi"`).
+
+validation_rules:
+  - name: "ResourceQuota existe"
+    type: "resource_exists"
+    kind: "ResourceQuota"
+    name: "quota-equipe"
+    namespace: "mon-namespace"
+  - name: "Deployment existe"
+    type: "resource_exists"
+    kind: "Deployment"
+    name: "nginx-quota"
+    namespace: "mon-namespace"
+  - name: "Mémoire demandée respecte le quota"
+    type: "jsonpath_assert"
+    kind: "Deployment"
+    name: "nginx-quota"
+    namespace: "mon-namespace"
+    path: "spec.template.spec.containers[0].resources.requests.memory"
+    expected: "256Mi"
+  - name: "Pod en cours d'exécution"
+    type: "jsonpath_assert"
+    kind: "Deployment"
+    name: "nginx-quota"
+    namespace: "mon-namespace"
+    path: "status.availableReplicas"
+    expected: 1

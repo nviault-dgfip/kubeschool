@@ -1,0 +1,65 @@
+id: "L09"
+title: "Stockage Persistant et subPath"
+level: "Avancé"
+objectives: |
+  - Utiliser une ConfigMap pour stocker un fichier de configuration
+  - Monter un fichier spécifique dans un dossier existant via subPath sans écraser le contenu
+  - Diagnostiquer les erreurs de montage de volumes (CreateContainerConfigError)
+images:
+  - "nginx:1.29.4"
+instructions: |
+  **Contexte** : Vous devez injecter un fichier de configuration `custom.conf` dans le dossier `/etc/nginx/conf.d/` d'un conteneur Nginx, tout en conservant les autres fichiers déjà présents dans ce dossier.
+
+  **Consignes** :
+  1. Créez le namespace 'mon-namespace' s'il n'existe pas.
+  2. Créez une ConfigMap nommée `nginx-config` contenant une clé `nginx.conf` :
+     `kubectl create configmap nginx-config --from-literal=nginx.conf="server { listen 8080; }" -n mon-namespace`
+  3. Créez un fichier `nginx-subpath.yaml` avec le contenu erroné suivant :
+  ```yaml
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    name: nginx-custom
+    namespace: mon-namespace
+  spec:
+    containers:
+    - name: nginx
+      image: nginx:1.29.4
+      volumeMounts:
+      - name: config-volume
+        mountPath: /etc/nginx/conf.d/custom.conf
+        subPath: web.conf # Erreur : la clé 'web.conf' n'existe pas dans la ConfigMap
+    volumes:
+    - name: config-volume
+      configMap:
+        name: nginx-config
+  ```
+  4. Appliquez le fichier. Le Pod devrait être en erreur (**CreateContainerConfigError**).
+  5. Utilisez `kubectl describe pod nginx-custom -n mon-namespace` pour identifier le problème de montage.
+  6. Corrigez le `subPath` dans votre YAML pour qu'il corresponde à la clé `nginx.conf` présente dans la ConfigMap.
+
+validation_rules:
+  - name: "ConfigMap existe"
+    type: "resource_exists"
+    kind: "ConfigMap"
+    name: "nginx-config"
+    namespace: "mon-namespace"
+  - name: "Pod existe"
+    type: "resource_exists"
+    kind: "Pod"
+    name: "nginx-custom"
+    namespace: "mon-namespace"
+  - name: "subPath corrigé"
+    type: "jsonpath_assert"
+    kind: "Pod"
+    name: "nginx-custom"
+    namespace: "mon-namespace"
+    path: "spec.containers[0].volumeMounts[0].subPath"
+    expected: "nginx.conf"
+  - name: "Pod en cours d'exécution"
+    type: "jsonpath_assert"
+    kind: "Pod"
+    name: "nginx-custom"
+    namespace: "mon-namespace"
+    path: "status.phase"
+    expected: "Running"

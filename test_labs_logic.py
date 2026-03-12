@@ -25,123 +25,208 @@ class TestLabsLogic(unittest.TestCase):
         mock_resource.get.return_value = mock_obj
         return mock_resource
 
-    def test_l02_pod_bad_image(self):
-        with open('labs/02-pod-bad-image.yaml', 'r') as f:
+    def validate_lab(self, filepath, mock_states):
+        with open(filepath, 'r') as f:
             lab = yaml.safe_load(f)
-
-        # Successful state: Pod Running with correct image
-        success_state = {
-            "metadata": {"name": "nginx", "namespace": "mon-namespace"},
-            "spec": {"containers": [{"image": "nginx:1.29.4"}]},
-            "status": {"phase": "Running"}
-        }
-
-        mock_pod_res = self.mock_resource_get(success_state)
-        mock_ns_res = self.mock_resource_get({"metadata": {"name": "mon-namespace"}}, namespaced=False)
 
         def side_effect(kind, **kwargs):
             k = kind.lower()
-            if k == "pod": return [mock_pod_res]
-            if k == "namespace": return [mock_ns_res]
+            if k in mock_states:
+                return [self.mock_resource_get(mock_states[k], namespaced=mock_states[k].get("_namespaced", True))]
             return []
 
         self.validator.dynamic_client.resources.search.side_effect = side_effect
 
-        # Bypass connection check
         with patch.object(LabValidator, '_refresh_config', return_value=True):
             results = self.validator.validate_all(lab['validation_rules'], "mock-context")
 
+        return results
+
+    def test_l02_pod_bad_image(self):
+        mock_states = {
+            "pod": {
+                "metadata": {"name": "nginx", "namespace": "mon-namespace"},
+                "spec": {"containers": [{"image": "nginx:1.29.4"}]},
+                "status": {"phase": "Running"}
+            },
+            "namespace": {
+                "metadata": {"name": "mon-namespace"},
+                "_namespaced": False
+            }
+        }
+        results = self.validate_lab('labs/02-pod-bad-image.yaml', mock_states)
         for r in results:
             self.assertTrue(r['success'], f"Rule failed: {r['rule']} - {r['message']}")
 
     def test_l03_replicaset_bad(self):
-        with open('labs/03-replicaset-bad.yaml', 'r') as f:
-            lab = yaml.safe_load(f)
-
-        success_state = {
-            "metadata": {"name": "nginx-rs", "namespace": "mon-namespace"},
-            "spec": {
-                "replicas": 3,
-                "selector": {"matchLabels": {"app": "mon-nginx-rs"}}
-            },
-            "status": {
-                "replicas": 3,
-                "readyReplicas": 3
+        mock_states = {
+            "replicaset": {
+                "metadata": {"name": "nginx-rs", "namespace": "mon-namespace"},
+                "spec": {
+                    "replicas": 3,
+                    "selector": {"matchLabels": {"app": "mon-nginx-rs"}}
+                },
+                "status": {
+                    "replicas": 3,
+                    "readyReplicas": 3
+                }
             }
         }
-
-        mock_rs_res = self.mock_resource_get(success_state)
-        self.validator.dynamic_client.resources.search.return_value = [mock_rs_res]
-
-        with patch.object(LabValidator, '_refresh_config', return_value=True):
-            results = self.validator.validate_all(lab['validation_rules'], "mock-context")
-
+        results = self.validate_lab('labs/03-replicaset-bad.yaml', mock_states)
         for r in results:
             self.assertTrue(r['success'], f"Rule failed: {r['rule']} - {r['message']}")
 
     def test_l04_deployment_bad_labels(self):
-        with open('labs/04-deployment-bad-labels.yaml', 'r') as f:
-            lab = yaml.safe_load(f)
-
-        success_state = {
-            "metadata": {"name": "nginx-deployment", "namespace": "mon-namespace"},
-            "spec": {
-                "selector": {"matchLabels": {"app": "nginx-dp"}}
-            },
-            "status": {
-                "availableReplicas": 3
+        mock_states = {
+            "deployment": {
+                "metadata": {"name": "nginx-deployment", "namespace": "mon-namespace"},
+                "spec": {
+                    "selector": {"matchLabels": {"app": "nginx-dp"}}
+                },
+                "status": {
+                    "availableReplicas": 3
+                }
             }
         }
-
-        mock_deploy_res = self.mock_resource_get(success_state)
-        self.validator.dynamic_client.resources.search.return_value = [mock_deploy_res]
-
-        with patch.object(LabValidator, '_refresh_config', return_value=True):
-            results = self.validator.validate_all(lab['validation_rules'], "mock-context")
-
+        results = self.validate_lab('labs/04-deployment-bad-labels.yaml', mock_states)
         for r in results:
             self.assertTrue(r['success'], f"Rule failed: {r['rule']} - {r['message']}")
 
     def test_l05_pvc_bad_class(self):
-        with open('labs/05-pvc-bad-class.yaml', 'r') as f:
-            lab = yaml.safe_load(f)
-
-        success_state = {
-            "metadata": {"name": "mon-pvc-class", "namespace": "mon-namespace"},
-            "spec": {
-                "storageClassName": "standard"
-            },
-            "status": {
-                "phase": "Bound"
+        mock_states = {
+            "persistentvolumeclaim": {
+                "metadata": {"name": "mon-pvc-class", "namespace": "mon-namespace"},
+                "spec": {
+                    "storageClassName": "standard"
+                },
+                "status": {
+                    "phase": "Bound"
+                }
             }
         }
-
-        mock_pvc_res = self.mock_resource_get(success_state)
-        self.validator.dynamic_client.resources.search.return_value = [mock_pvc_res]
-
-        with patch.object(LabValidator, '_refresh_config', return_value=True):
-            results = self.validator.validate_all(lab['validation_rules'], "mock-context")
-
+        results = self.validate_lab('labs/05-pvc-bad-class.yaml', mock_states)
         for r in results:
             self.assertTrue(r['success'], f"Rule failed: {r['rule']} - {r['message']}")
 
     def test_l06_cronjob_bad_schedule(self):
-        with open('labs/06-cronjob-bad-schedule.yaml', 'r') as f:
-            lab = yaml.safe_load(f)
-
-        success_state = {
-            "metadata": {"name": "mon-cronjob", "namespace": "mon-namespace"},
-            "spec": {
-                "schedule": "* * * * *"
+        mock_states = {
+            "cronjob": {
+                "metadata": {"name": "mon-cronjob", "namespace": "mon-namespace"},
+                "spec": {
+                    "schedule": "* * * * *"
+                }
             }
         }
+        results = self.validate_lab('labs/06-cronjob-bad-schedule.yaml', mock_states)
+        for r in results:
+            self.assertTrue(r['success'], f"Rule failed: {r['rule']} - {r['message']}")
 
-        mock_cj_res = self.mock_resource_get(success_state)
-        self.validator.dynamic_client.resources.search.return_value = [mock_cj_res]
+    def test_l07_resource_quotas(self):
+        mock_states = {
+            "resourcequota": {
+                "metadata": {"name": "quota-equipe", "namespace": "mon-namespace"},
+                "spec": {"hard": {"requests.memory": "512Mi"}}
+            },
+            "deployment": {
+                "metadata": {"name": "nginx-quota", "namespace": "mon-namespace"},
+                "spec": {
+                    "template": {
+                        "spec": {
+                            "containers": [{
+                                "resources": {"requests": {"memory": "256Mi"}}
+                            }]
+                        }
+                    }
+                },
+                "status": {"availableReplicas": 1}
+            }
+        }
+        results = self.validate_lab('labs/07-resource-quotas.yaml', mock_states)
+        for r in results:
+            self.assertTrue(r['success'], f"Rule failed: {r['rule']} - {r['message']}")
 
-        with patch.object(LabValidator, '_refresh_config', return_value=True):
-            results = self.validator.validate_all(lab['validation_rules'], "mock-context")
+    def test_l08_node_affinity(self):
+        mock_states = {
+            "pod": {
+                "metadata": {"name": "nginx-paris", "namespace": "mon-namespace"},
+                "spec": {
+                    "affinity": {
+                        "nodeAffinity": {
+                            "requiredDuringSchedulingIgnoredDuringExecution": {
+                                "nodeSelectorTerms": [{
+                                    "matchExpressions": [{"key": "zone"}]
+                                }]
+                            }
+                        }
+                    }
+                },
+                "status": {"phase": "Running"}
+            }
+        }
+        results = self.validate_lab('labs/08-node-affinity.yaml', mock_states)
+        for r in results:
+            self.assertTrue(r['success'], f"Rule failed: {r['rule']} - {r['message']}")
 
+    def test_l09_storage_subpath(self):
+        mock_states = {
+            "configmap": {
+                "metadata": {"name": "nginx-config", "namespace": "mon-namespace"}
+            },
+            "pod": {
+                "metadata": {"name": "nginx-custom", "namespace": "mon-namespace"},
+                "spec": {
+                    "containers": [{
+                        "volumeMounts": [{"subPath": "nginx.conf"}]
+                    }]
+                },
+                "status": {"phase": "Running"}
+            }
+        }
+        results = self.validate_lab('labs/09-storage-subpath.yaml', mock_states)
+        for r in results:
+            self.assertTrue(r['success'], f"Rule failed: {r['rule']} - {r['message']}")
+
+    def test_l10_service_selector(self):
+        mock_states = {
+            "pod": {
+                "metadata": {"name": "web-server-pod", "namespace": "mon-namespace"}
+            },
+            "service": {
+                "metadata": {"name": "web-service", "namespace": "mon-namespace"},
+                "spec": {"selector": {"app": "web-server"}}
+            },
+            "endpoints": {
+                "metadata": {"name": "web-service", "namespace": "mon-namespace"}
+            }
+        }
+        results = self.validate_lab('labs/10-service-selector.yaml', mock_states)
+        for r in results:
+            self.assertTrue(r['success'], f"Rule failed: {r['rule']} - {r['message']}")
+
+    def test_l11_debug_challenge(self):
+        mock_states = {
+            "pod": {
+                "metadata": {"name": "backend-db", "namespace": "mon-namespace"},
+                "status": {"phase": "Running"}
+            },
+            "endpoints": {
+                "metadata": {"name": "backend-service", "namespace": "mon-namespace"}
+            },
+            "deployment": {
+                "metadata": {"name": "frontend-app", "namespace": "mon-namespace"},
+                "spec": {
+                    "template": {
+                        "spec": {
+                            "containers": [{
+                                "resources": {"limits": {"memory": "64Mi"}}
+                            }]
+                        }
+                    }
+                },
+                "status": {"availableReplicas": 2}
+            }
+        }
+        results = self.validate_lab('labs/11-debug-challenge.yaml', mock_states)
         for r in results:
             self.assertTrue(r['success'], f"Rule failed: {r['rule']} - {r['message']}")
 
