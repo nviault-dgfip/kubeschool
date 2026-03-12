@@ -1,0 +1,2 @@
+# Troubleshooting
+Check Docker permissions.
