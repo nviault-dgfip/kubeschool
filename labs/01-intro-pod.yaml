@@ -1,0 +1,23 @@
+id: "L01"
+title: "Premier pas avec les Pods"
+level: "Débutant"
+objectives: |
+  - Comprendre la création d'un Pod simple
+  - Apprendre à définir une image et des labels
+images:
+  - "httpd:2.4"
+instructions: |
+  1. Créez un Pod nommé 'my-apache-pod'
+  2. Image 'httpd:2.4'
+  3. Label 'app: apache'
+validation_rules:
+  - name: "Pod existe"
+    type: "resource_exists"
+    kind: "Pod"
+    name: "my-apache-pod"
+  - name: "Image correcte"
+    type: "jsonpath_assert"
+    kind: "Pod"
+    name: "my-apache-pod"
+    path: "spec.containers[0].image"
+    expected: "httpd:2.4"
