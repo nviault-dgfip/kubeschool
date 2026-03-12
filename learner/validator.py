@@ -1,32 +1,21 @@
 import json
-from kubernetes import client, config
+from kubernetes import client, config, dynamic
 from jsonpath_ng import jsonpath, parse
 
 class LabValidator:
     def __init__(self, context_name="kind-kind"):
         # On charge la config du cluster Kind
-        try:
-            config.load_kube_config(context=context_name)
-            self.apps_v1 = client.AppsV1Api()
-            self.core_v1 = client.CoreV1Api()
-            self.custom_objects = client.CustomObjectsApi()
-            self.api_client = client.ApiClient()
-        except Exception as e:
-            # We don't want to crash here if the cluster doesn't exist yet
-            self.apps_v1 = None
-            self.core_v1 = None
-            self.custom_objects = None
-            self.api_client = None
+        self._refresh_config(context_name)
 
     def _refresh_config(self, context_name):
         try:
             config.load_kube_config(context=context_name)
-            self.apps_v1 = client.AppsV1Api()
-            self.core_v1 = client.CoreV1Api()
-            self.custom_objects = client.CustomObjectsApi()
             self.api_client = client.ApiClient()
+            self.dynamic_client = dynamic.DynamicClient(self.api_client)
             return True
-        except:
+        except Exception:
+            self.api_client = None
+            self.dynamic_client = None
             return False
 
     def validate_all(self, rules, context_name):
@@ -54,22 +43,48 @@ class LabValidator:
 
         return results
 
+    def _get_resource(self, kind, api_version=None):
+        """Récupère la ressource dynamiquement."""
+        if api_version:
+            return self.dynamic_client.resources.get(api_version=api_version, kind=kind)
+        else:
+            # Fallback pour les types courants si api_version n'est pas fourni
+            fallbacks = {
+                "pod": ("v1", "Pod"),
+                "service": ("v1", "Service"),
+                "namespace": ("v1", "Namespace"),
+                "configmap": ("v1", "ConfigMap"),
+                "secret": ("v1", "Secret"),
+                "persistentvolumeclaim": ("v1", "PersistentVolumeClaim"),
+                "deployment": ("apps/v1", "Deployment"),
+                "statefulset": ("apps/v1", "StatefulSet"),
+                "daemonset": ("apps/v1", "DaemonSet"),
+                "ingress": ("networking.k8s.io/v1", "Ingress"),
+                "networkpolicy": ("networking.k8s.io/v1", "NetworkPolicy"),
+                "role": ("rbac.authorization.k8s.io/v1", "Role"),
+                "clusterrole": ("rbac.authorization.k8s.io/v1", "ClusterRole"),
+                "rolebinding": ("rbac.authorization.k8s.io/v1", "RoleBinding"),
+                "clusterrolebinding": ("rbac.authorization.k8s.io/v1", "ClusterRoleBinding"),
+            }
+            if kind.lower() in fallbacks:
+                api_v, k = fallbacks[kind.lower()]
+                return self.dynamic_client.resources.get(api_version=api_v, kind=k)
+
+            # Recherche générique
+            return self.dynamic_client.resources.get(kind=kind)
+
     def check_resource_exists(self, rule):
-        kind = rule["kind"].lower()
+        kind = rule["kind"]
         name = rule["name"]
         ns = rule.get("namespace", "default")
+        api_version = rule.get("api_version")
 
         try:
-            if kind == "pod":
-                self.core_v1.read_namespaced_pod(name, ns)
-            elif kind == "deployment":
-                self.apps_v1.read_namespaced_deployment(name, ns)
-            elif kind == "service":
-                self.core_v1.read_namespaced_service(name, ns)
-            elif kind == "namespace":
-                self.core_v1.read_namespace(name)
+            resource = self._get_resource(kind, api_version)
+            if resource.namespaced:
+                resource.get(name=name, namespace=ns)
             else:
-                return False, f"Kind '{kind}' non supporté pour 'resource_exists'"
+                resource.get(name=name)
             return True, f"Ressource {kind}/{name} trouvée."
         except Exception as e:
             return False, f"Ressource {kind}/{name} introuvable ou erreur : {str(e)}"
@@ -80,19 +95,17 @@ class LabValidator:
         ns = rule.get("namespace", "default")
         path = rule["path"]
         expected = rule["expected"]
+        api_version = rule.get("api_version")
 
         try:
-            if kind == "pod":
-                obj = self.core_v1.read_namespaced_pod(name, ns)
-            elif kind == "deployment":
-                obj = self.apps_v1.read_namespaced_deployment(name, ns)
-            elif kind == "service":
-                obj = self.core_v1.read_namespaced_service(name, ns)
+            resource = self._get_resource(kind, api_version)
+            if resource.namespaced:
+                obj = resource.get(name=name, namespace=ns)
             else:
-                return False, f"Kind '{kind}' non supporté pour 'jsonpath_assert'"
+                obj = resource.get(name=name)
 
             # Conversion de l'objet K8s en dictionnaire JSON
-            obj_dict = self.api_client.sanitize_for_serialization(obj)
+            obj_dict = obj.to_dict()
 
             # Utilisation de jsonpath-ng pour extraire la valeur
             jsonpath_expr = parse(path)

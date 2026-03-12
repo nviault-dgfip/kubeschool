@@ -1,6 +1,9 @@
 id: "L01"
 title: "Premier pas avec les Pods"
 level: "Débutant"
+objectives: |
+  - Comprendre la création d'un Pod simple
+  - Apprendre à définir une image et des labels
 images:
   - "httpd:2.4"
 instructions: |
