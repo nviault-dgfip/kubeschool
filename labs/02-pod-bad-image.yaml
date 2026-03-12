@@ -1,0 +1,69 @@
+id: "L02"
+title: "Pod avec une image inexistante"
+level: "Débutant"
+objectives: |
+  - Identifier une erreur de tirage d'image (ImagePullBackOff)
+  - Corriger le tag d'une image dans un manifeste de Pod
+  - Pratiquer la gestion des namespaces
+images:
+  - "nginx:1.29.4"
+instructions: |
+  **Contexte** : Le manifeste de base d'un pod attendu est le suivant :
+  ```yaml
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    labels:
+      app: mon-nginx
+    name: nginx
+    namespace: mon-namespace
+  spec:
+    containers:
+    - image: nginx:1.29.4
+      name: nginx
+  ```
+
+  **Consignes** :
+  1. Créez le namespace 'mon-namespace' s'il n'existe pas : `kubectl create namespace mon-namespace`
+  2. Créez le fichier `pod-bad-image.yaml` avec le contenu suivant (qui contient une erreur volontaire) :
+  ```yaml
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    labels:
+      app: mon-nginx
+    name: nginx
+    namespace: mon-namespace
+  spec:
+    containers:
+    - image: nginx:1.29-4
+      name: nginx
+  ```
+  3. Appliquez-le avec `kubectl apply -f pod-bad-image.yaml`.
+  4. Identifiez pourquoi le pod reste en **ImagePullBackOff** (utilisez `kubectl describe pod nginx -n mon-namespace`).
+  5. Corrigez le fichier pour utiliser l'image `nginx:1.29.4` et appliquez la modification.
+
+validation_rules:
+  - name: "Namespace mon-namespace existe"
+    type: "resource_exists"
+    kind: "Namespace"
+    name: "mon-namespace"
+  - name: "Pod existe dans mon-namespace"
+    type: "resource_exists"
+    kind: "Pod"
+    name: "nginx"
+    namespace: "mon-namespace"
+  - name: "Image corrigée"
+    type: "jsonpath_assert"
+    kind: "Pod"
+    name: "nginx"
+    namespace: "mon-namespace"
+    path: "spec.containers[0].image"
+    expected: "nginx:1.29.4"
+  - name: "Pod en cours d'exécution"
+    type: "jsonpath_assert"
+    kind: "Pod"
+    name: "nginx"
+    namespace: "mon-namespace"
+    path: "status.phase"
+    expected: "Running"

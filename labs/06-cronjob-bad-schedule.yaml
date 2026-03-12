@@ -1,0 +1,73 @@
+id: "L06"
+title: "CronJob avec expression de planification invalide"
+level: "Intermédiaire"
+objectives: |
+  - Identifier une erreur de syntaxe dans une planification Cron
+  - Utiliser `kubectl describe` pour diagnostiquer des erreurs de validation
+  - Configurer correctement une tâche périodique (CronJob)
+images:
+  - "busybox:1.36.1"
+instructions: |
+  **Contexte** : Manifeste de CronJob attendu :
+  ```yaml
+  apiVersion: batch/v1
+  kind: CronJob
+  metadata:
+    name: mon-cronjob
+    namespace: mon-namespace
+  spec:
+    schedule: "* * * * *"
+    jobTemplate:
+      spec:
+        template:
+          spec:
+            containers:
+            - name: bonjour
+              image: busybox:1.36.1
+              command:
+              - /bin/sh
+              - -c
+              - date; echo Bonjour depuis mon cluster Kubernetes
+            restartPolicy: OnFailure
+  ```
+
+  **Consignes** :
+  1. Créez le fichier `cronjob-bad-schedule.yaml` avec une erreur de planification :
+  ```yaml
+  apiVersion: batch/v1
+  kind: CronJob
+  metadata:
+    name: mon-cronjob
+    namespace: mon-namespace
+  spec:
+    schedule: "60 * * * *" # Erreur : 60 n'est pas une minute valide (0-59)
+    jobTemplate:
+      spec:
+        template:
+          spec:
+            containers:
+            - name: bonjour
+              image: busybox:1.36.1
+              command:
+              - /bin/sh
+              - -c
+              - date; echo Bonjour depuis mon cluster Kubernetes
+            restartPolicy: OnFailure
+  ```
+  2. Appliquez-le. Note : kubectl peut rejeter le fichier immédiatement pour erreur de validation côté client ou serveur.
+  3. Si l'objet est créé mais ne se lance pas, utilisez `kubectl describe cronjob mon-cronjob -n mon-namespace` pour constater l'erreur de validation.
+  4. Corrigez l'expression de planification (par exemple en utilisant `*/1 * * * *` pour chaque minute ou `* * * * *`).
+
+validation_rules:
+  - name: "CronJob existe dans mon-namespace"
+    type: "resource_exists"
+    kind: "CronJob"
+    name: "mon-cronjob"
+    namespace: "mon-namespace"
+  - name: "Planification valide"
+    type: "jsonpath_assert"
+    kind: "CronJob"
+    name: "mon-cronjob"
+    namespace: "mon-namespace"
+    path: "spec.schedule"
+    expected: "* * * * *"
