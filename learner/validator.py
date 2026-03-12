@@ -3,7 +3,7 @@ from kubernetes import client, config, dynamic
 from jsonpath_ng import jsonpath, parse
 
 class LabValidator:
-    def __init__(self, context_name="kind-kind"):
+    def __init__(self, context_name="kind-kubeschool-cluster"):
         # On charge la config du cluster Kind
         self._refresh_config(context_name)
 
@@ -48,30 +48,15 @@ class LabValidator:
         if api_version:
             return self.dynamic_client.resources.get(api_version=api_version, kind=kind)
         else:
-            # Fallback pour les types courants si api_version n'est pas fourni
-            fallbacks = {
-                "pod": ("v1", "Pod"),
-                "service": ("v1", "Service"),
-                "namespace": ("v1", "Namespace"),
-                "configmap": ("v1", "ConfigMap"),
-                "secret": ("v1", "Secret"),
-                "persistentvolumeclaim": ("v1", "PersistentVolumeClaim"),
-                "deployment": ("apps/v1", "Deployment"),
-                "statefulset": ("apps/v1", "StatefulSet"),
-                "daemonset": ("apps/v1", "DaemonSet"),
-                "ingress": ("networking.k8s.io/v1", "Ingress"),
-                "networkpolicy": ("networking.k8s.io/v1", "NetworkPolicy"),
-                "role": ("rbac.authorization.k8s.io/v1", "Role"),
-                "clusterrole": ("rbac.authorization.k8s.io/v1", "ClusterRole"),
-                "rolebinding": ("rbac.authorization.k8s.io/v1", "RoleBinding"),
-                "clusterrolebinding": ("rbac.authorization.k8s.io/v1", "ClusterRoleBinding"),
-            }
-            if kind.lower() in fallbacks:
-                api_v, k = fallbacks[kind.lower()]
-                return self.dynamic_client.resources.get(api_version=api_v, kind=k)
+            # Recherche dynamique de la ressource par son 'kind'
+            # On tente de trouver la meilleure correspondance
+            resources = self.dynamic_client.resources.search(kind=kind)
+            if not resources:
+                raise ValueError(f"Ressource de type '{kind}' non trouvée.")
 
-            # Recherche générique
-            return self.dynamic_client.resources.get(kind=kind)
+            # Si plusieurs versions existent, on prend la plus récente (souvent la première dans la liste ou celle avec le plus de capacités)
+            # Dans un environnement simple, search() retourne souvent les ressources dans un ordre cohérent.
+            return resources[0]
 
     def check_resource_exists(self, rule):
         kind = rule["kind"]
