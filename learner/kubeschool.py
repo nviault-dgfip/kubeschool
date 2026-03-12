@@ -94,7 +94,15 @@ class KubeSchoolCLI:
             return
 
         with open(lab_file, 'r') as f:
-            lab_data = yaml.safe_load(f)
+            try:
+                lab_data = yaml.safe_load(f)
+            except yaml.YAMLError as e:
+                console.print(f"[red]Erreur lors de la lecture du fichier YAML : {e}[/red]")
+                return
+
+        if 'validation_rules' not in lab_data:
+            console.print(f"[red]Erreur : Aucune règle de validation trouvée dans {lab_file}.[/red]")
+            return
 
         with console.status("[bold cyan]Vérification de votre travail..."):
             results = self.validator.validate_all(lab_data['validation_rules'], context_name=f"kind-{self.cluster_name}")
