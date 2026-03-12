@@ -1,0 +1,61 @@
+id: "L08"
+title: "Ordonnancement et Affinité de Nœud"
+level: "Intermédiaire"
+objectives: |
+  - Comprendre le fonctionnement de NodeAffinity (requiredDuringSchedulingIgnoredDuringExecution)
+  - Apprendre à labelliser des nœuds pour influencer l'ordonnancement
+  - Diagnostiquer un Pod restant à l'état 'Pending' pour cause d'insatisfaisabilité de contraintes
+images:
+  - "nginx:1.29.4"
+instructions: |
+  **Contexte** : Votre application doit impérativement s'exécuter sur un nœud situé dans la zone géographique 'paris'.
+
+  **Consignes** :
+  1. Créez le namespace 'mon-namespace' s'il n'existe pas.
+  2. Créez un fichier `app-affinity.yaml` avec le contenu suivant :
+  ```yaml
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    name: nginx-paris
+    namespace: mon-namespace
+  spec:
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+          - matchExpressions:
+            - key: zone
+              operator: In
+              values:
+              - paris
+    containers:
+    - name: nginx
+      image: nginx:1.29.4
+  ```
+  3. Appliquez le fichier. Observez l'état du Pod avec `kubectl get pods -n mon-namespace`.
+  4. Le Pod doit être en état **Pending**. Utilisez `kubectl describe pod nginx-paris -n mon-namespace` pour identifier la cause (cherchez les messages du `default-scheduler`).
+  5. Identifiez le nom de votre nœud Kind avec `kubectl get nodes`.
+  6. Ajoutez le label manquant au nœud : `kubectl label nodes <nom-du-noeud> zone=paris`.
+  7. Vérifiez que le Pod passe en état **Running**.
+
+validation_rules:
+  - name: "Pod existe dans mon-namespace"
+    type: "resource_exists"
+    kind: "Pod"
+    name: "nginx-paris"
+    namespace: "mon-namespace"
+  - name: "NodeAffinity configurée"
+    type: "jsonpath_assert"
+    kind: "Pod"
+    name: "nginx-paris"
+    namespace: "mon-namespace"
+    path: "spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key"
+    expected: "zone"
+  - name: "Pod en cours d'exécution"
+    type: "jsonpath_assert"
+    kind: "Pod"
+    name: "nginx-paris"
+    namespace: "mon-namespace"
+    path: "status.phase"
+    expected: "Running"

@@ -1,0 +1,72 @@
+id: "L10"
+title: "Réseau et Sélecteurs de Service"
+level: "Intermédiaire"
+objectives: |
+  - Comprendre la liaison entre un Service et des Pods via les labels
+  - Diagnostiquer un Service sans Endpoints
+  - Corriger un sélecteur de Service pour rétablir la connectivité
+images:
+  - "nginx:1.29.4"
+instructions: |
+  **Contexte** : Vous avez déployé un Service pour exposer votre application Nginx, mais les clients n'arrivent pas à joindre le serveur.
+
+  **Consignes** :
+  1. Créez le namespace 'mon-namespace' s'il n'existe pas.
+  2. Déployez un Pod avec le label `app: web-server` :
+  ```yaml
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    name: web-server-pod
+    namespace: mon-namespace
+    labels:
+      app: web-server
+  spec:
+    containers:
+    - name: nginx
+      image: nginx:1.29.4
+      ports:
+      - containerPort: 80
+  ```
+  3. Créez un Service avec un sélecteur erroné via le fichier `web-service.yaml` :
+  ```yaml
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: web-service
+    namespace: mon-namespace
+  spec:
+    selector:
+      app: nginx # Erreur : le label du Pod est 'web-server'
+    ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  ```
+  4. Appliquez le Service. Vérifiez les `Endpoints` associés au Service : `kubectl get endpoints web-service -n mon-namespace`. La liste devrait être vide ou afficher `<none>`.
+  5. Corrigez le `selector` dans `web-service.yaml` pour qu'il corresponde au label du Pod (`app: web-server`).
+  6. Vérifiez à nouveau les `Endpoints` pour confirmer que l'IP du Pod est maintenant associée au Service.
+
+validation_rules:
+  - name: "Pod existe"
+    type: "resource_exists"
+    kind: "Pod"
+    name: "web-server-pod"
+    namespace: "mon-namespace"
+  - name: "Service existe"
+    type: "resource_exists"
+    kind: "Service"
+    name: "web-service"
+    namespace: "mon-namespace"
+  - name: "Sélecteur de Service correct"
+    type: "jsonpath_assert"
+    kind: "Service"
+    name: "web-service"
+    namespace: "mon-namespace"
+    path: "spec.selector.app"
+    expected: "web-server"
+  - name: "Service a des Endpoints"
+    type: "resource_exists"
+    kind: "Endpoints"
+    name: "web-service"
+    namespace: "mon-namespace"

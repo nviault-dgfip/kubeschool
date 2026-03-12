@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-server-pod
+  namespace: mon-namespace
+  labels:
+    app: web-server
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.29.4
+    ports:
+    - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-service
+  namespace: mon-namespace
+spec:
+  selector:
+    app: web-server
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
