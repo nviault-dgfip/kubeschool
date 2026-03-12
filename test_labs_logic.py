@@ -203,5 +203,32 @@ class TestLabsLogic(unittest.TestCase):
         for r in results:
             self.assertTrue(r['success'], f"Rule failed: {r['rule']} - {r['message']}")
 
+    def test_l11_debug_challenge(self):
+        mock_states = {
+            "pod": {
+                "metadata": {"name": "backend-db", "namespace": "mon-namespace"},
+                "status": {"phase": "Running"}
+            },
+            "endpoints": {
+                "metadata": {"name": "backend-service", "namespace": "mon-namespace"}
+            },
+            "deployment": {
+                "metadata": {"name": "frontend-app", "namespace": "mon-namespace"},
+                "spec": {
+                    "template": {
+                        "spec": {
+                            "containers": [{
+                                "resources": {"limits": {"memory": "64Mi"}}
+                            }]
+                        }
+                    }
+                },
+                "status": {"availableReplicas": 2}
+            }
+        }
+        results = self.validate_lab('labs/11-debug-challenge.yaml', mock_states)
+        for r in results:
+            self.assertTrue(r['success'], f"Rule failed: {r['rule']} - {r['message']}")
+
 if __name__ == '__main__':
     unittest.main()

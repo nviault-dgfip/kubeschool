@@ -1,0 +1,110 @@
+id: "L11"
+title: "Le Grand Défi du Debug"
+level: "Avancé"
+objectives: |
+  - Appliquer une méthodologie de dépannage complète (get, describe, logs, events)
+  - Résoudre des problèmes d'ordonnancement, de ressources, d'images et de réseau
+  - Rétablir la communication entre deux composants d'une application
+images:
+  - "redis:7.2"
+  - "nginx:1.29.4"
+instructions: |
+  **Contexte** : Vous devez déployer une application composée d'un Backend (Redis) et d'un Frontend (Nginx). Malheureusement, les fichiers fournis par l'équipe de développement sont truffés d'erreurs.
+
+  **Consignes** :
+  1. Assurez-vous que le namespace `mon-namespace` existe et qu'un quota est présent (utilisez celui du lab L07 ou créez-en un limitant la mémoire à 512Mi).
+  2. Tentez de déployer le Backend avec le fichier `broken-backend.yaml` :
+  ```yaml
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    name: backend-db
+    namespace: mon-namespace
+    labels:
+      app: redis-db
+  spec:
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+          - matchExpressions:
+            - key: zone
+              operator: In
+              values:
+              - lyon # Erreur : le nœud est en zone=paris
+    containers:
+    - name: redis
+      image: redis:7.9.9 # Erreur : version inexistante
+      resources:
+        requests:
+          memory: "1Gi" # Erreur : dépasse le quota de 512Mi
+  ```
+  3. Corrigez le Backend pour qu'il soit **Running** (Image: `redis:7.2`, Zone: `paris`, Memory Request: `128Mi`).
+  4. Déployez le Service pour le Backend via `broken-service.yaml` :
+  ```yaml
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: backend-service
+    namespace: mon-namespace
+  spec:
+    selector:
+      app: database # Erreur : le label du Pod est 'redis-db'
+    ports:
+    - port: 6379
+      targetPort: 6379
+  ```
+  5. Corrigez le Service pour qu'il possède des **Endpoints** valides.
+  6. Déployez le Frontend avec `broken-frontend.yaml` :
+  ```yaml
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: frontend-app
+    namespace: mon-namespace
+  spec:
+    replicas: 2
+    selector:
+      matchLabels:
+        app: web-ui
+    template:
+      metadata:
+        labels:
+          app: frontend # Erreur : ne correspond pas au selector 'web-ui'
+      spec:
+        containers:
+        - name: nginx
+          image: nginx:1.29.4
+          resources:
+            limits:
+              memory: "10Mi" # Erreur : risque d'OOMKilled, passez à 64Mi
+  ```
+  7. Corrigez le Deployment pour que les répliques soient **Available**.
+
+validation_rules:
+  - name: "Backend en cours d'exécution"
+    type: "jsonpath_assert"
+    kind: "Pod"
+    name: "backend-db"
+    namespace: "mon-namespace"
+    path: "status.phase"
+    expected: "Running"
+  - name: "Service Backend lié au Pod"
+    type: "resource_exists"
+    kind: "Endpoints"
+    name: "backend-service"
+    namespace: "mon-namespace"
+  - name: "Frontend déployé avec succès"
+    type: "jsonpath_assert"
+    kind: "Deployment"
+    name: "frontend-app"
+    namespace: "mon-namespace"
+    path: "status.availableReplicas"
+    expected: 2
+  - name: "Limites mémoire Frontend correctes"
+    type: "jsonpath_assert"
+    kind: "Deployment"
+    name: "frontend-app"
+    namespace: "mon-namespace"
+    path: "spec.template.spec.containers[0].resources.limits.memory"
+    expected: "64Mi"
