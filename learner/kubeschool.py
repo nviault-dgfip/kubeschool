@@ -72,6 +72,10 @@ class KubeSchoolCLI:
                 if res.returncode != 0:
                     console.print(f"[red]Erreur lors de la création du cluster : {res.stderr}[/red]")
                     return
+        else:
+            # Nettoyage automatique des ressources des labs précédents pour repartir sur une base saine
+            with console.status("[bold yellow]Nettoyage de l'environnement (namespace mon-namespace)..."):
+                self.run_shell(f"kubectl delete namespace mon-namespace --ignore-not-found --context kind-{self.cluster_name} --wait=true")
 
         # 2. Pré-chargement des images
         images = lab_data.get('images', [])

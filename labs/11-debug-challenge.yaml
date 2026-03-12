@@ -11,9 +11,22 @@ images:
 instructions: |
   **Contexte** : Vous devez déployer une application composée d'un Backend (Redis) et d'un Frontend (Nginx). Malheureusement, les fichiers fournis par l'équipe de développement sont truffés d'erreurs.
 
+  **Attention** : Le CLI KubeSchool a été mis à jour pour nettoyer automatiquement le namespace `mon-namespace` au démarrage de chaque lab.
+
   **Consignes** :
-  1. Assurez-vous que le namespace `mon-namespace` existe et qu'un quota est présent (utilisez celui du lab L07 ou créez-en un limitant la mémoire à 512Mi).
-  2. Tentez de déployer le Backend avec le fichier `broken-backend.yaml` :
+  1. Créez le namespace 'mon-namespace' : `kubectl create namespace mon-namespace`
+  2. Appliquez un quota limitant la mémoire à 512Mi via `quota.yaml` :
+  ```yaml
+  apiVersion: v1
+  kind: ResourceQuota
+  metadata:
+    name: quota-equipe
+    namespace: mon-namespace
+  spec:
+    hard:
+      requests.memory: "512Mi"
+  ```
+  3. Tentez de déployer le Backend avec le fichier `broken-backend.yaml` :
   ```yaml
   apiVersion: v1
   kind: Pod
@@ -39,8 +52,8 @@ instructions: |
         requests:
           memory: "1Gi" # Erreur : dépasse le quota de 512Mi
   ```
-  3. Corrigez le Backend pour qu'il soit **Running** (Image: `redis:7.2`, Zone: `paris`, Memory Request: `128Mi`).
-  4. Déployez le Service pour le Backend via `broken-service.yaml` :
+  4. Corrigez le Backend pour qu'il soit **Running** (Image: `redis:7.2`, Zone: `paris`, Memory Request: `128Mi`).
+  5. Déployez le Service pour le Backend via `broken-service.yaml` :
   ```yaml
   apiVersion: v1
   kind: Service
@@ -54,8 +67,8 @@ instructions: |
     - port: 6379
       targetPort: 6379
   ```
-  5. Corrigez le Service pour qu'il possède des **Endpoints** valides.
-  6. Déployez le Frontend avec `broken-frontend.yaml` :
+  6. Corrigez le Service pour qu'il possède des **Endpoints** valides.
+  7. Déployez le Frontend avec `broken-frontend.yaml` :
   ```yaml
   apiVersion: apps/v1
   kind: Deployment
@@ -79,7 +92,7 @@ instructions: |
             limits:
               memory: "10Mi" # Erreur : risque d'OOMKilled, passez à 64Mi
   ```
-  7. Corrigez le Deployment pour que les répliques soient **Available**.
+  8. Corrigez le Deployment pour que les répliques soient **Available**.
 
 validation_rules:
   - name: "Backend en cours d'exécution"
